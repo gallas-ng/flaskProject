@@ -1,8 +1,13 @@
 flask
 flask-smorest
-flask-dotenv
+python-dotenv
 sqlalchemy
 flask-sqlalchemy
 flask-jwt-extended
 passlib
 flask-migrate
+gunicorn
+psycopg2
+requests
+redis
+rq
