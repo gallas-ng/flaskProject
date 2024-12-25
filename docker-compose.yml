@@ -1,0 +1,13 @@
+# way to run multiple services (*images) at the same time
+version: '3'
+services:
+  web:
+    build: .
+    ports:
+      - "5000:5000"
+    volumes:
+      - .:/app
+
+# run : docker compose up
+# docker compose up --build --force-recreate --no-deps web // to commit some changes in a service
+# Docker Compose facilitates inter-service communication and configuration.

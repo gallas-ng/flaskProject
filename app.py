@@ -1,56 +1,116 @@
-from flask import Flask, request
-app = Flask(__name__)
+import os
+import secrets
+from flask import Flask, jsonify
+from sqlalchemy.testing.config import db_url
+from flask_jwt_extended import JWTManager
+from flask_migrate import Migrate
 
-Stores = [
-    {
-        "title" : "My Store",
-        "items" : [
-            { "name" : "Chair", "price" : 100 },
-            { "name" : "Table", "price" : 600 },
-        ]
-    }
-]
-@app.route('/')
-def hello_world():  # put application's code here
-    return 'Hello World!'
+from blocklist import BLOCKLIST
+from db import db
+import models
 
-@app.route('/store')
-def stores():
-    return {'stores': Stores}
+from flask_smorest import Api
 
-@app.route('/store', methods=['POST'])
-def create_store():
-    request_data = request.get_json()
-    new_store = { "title" : request_data["title"], "items" : []}
-    Stores.append(new_store)
-    return new_store, 201
-
-@app.post('/store/<string:title>/item')
-def create_item(title):
-    request_data = request.get_json()
-    for store in Stores:
-        if store["title"] == title:
-            new_item = { "name" : request_data['name'], "price" : request_data["price"] }
-            store["items"].append(new_item)
-            return new_item, 201
-    return {"message" : "Store not found"}, 404
-
-@app.get('/store/<string:title>')
-def get_store(title):
-    for store in Stores:
-        if store["title"] == title:
-            return store, 200
-    return {"message" : "Store not found"}, 404
-
-@app.get('/store/<string:title>/item')
-def get_item(title):
-    for store in Stores:
-        if store["title"] == title:
-            return {"items" :store['items']}, 200
-    return {"message" : "Store not found"}, 404
+from resources.item import blp as ItemBlueprint
+from resources.store import blp as StoreBlueprint
+from resources.tag import blp as TagBlueprint
+from resources.user import blp as UserBlueprint
 
 
+def create_app(db_url=None):
+    app = Flask(__name__)
+
+    app.config["PROPAGATE_EXCEPTIONS"] = True
+    app.config["API_TITLE"] = "Stores Rest API"
+    app.config["API_VERSION"] = "v1"
+    app.config["OPENAPI_VERSION"] = "3.0.3"
+    app.config["OPENAPI_URL_PREFIX"] = "/"
+    app.config["OPENAPI_SWAGGER_UI_PATH"] = "/swagger-ui"
+    app.config["OPENAPI_SWAGGER_UI_URL"] = "https://cdn.jsdelivr.net/npm/swagger-ui-dist/"
+    app.config["SQLALCHEMY_DATABASE_URI"] = db_url or  "sqlite:///data.db"
+    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    db.init_app(app)
+
+    migrate = Migrate(app, db)
+
+    # 1 - flask init db
+    # 2 - flask db migrate
+    # 3 - flask db upgrade
+    api = Api(app)
+
+    app.config["JWT_SECRET_KEY"] = "jose"
+    # app.config["JWT_SECRET_KEY"] = secrets.SystemRandom().getrandbits(128)
+
+    jwt = JWTManager(app)
+
+    # @jwt.additional_claims_loader
+    # def add_claims_to_jwt(identity):
+    #     # TODO: Read from a config file instead of hard-coding
+    #     if identity == 1:
+    #         return {"is_admin": True}
+    #     return {"is_admin": False}
+
+    @jwt.token_in_blocklist_loader
+    def check_if_token_in_blocklist(jwt_header, jwt_payload):
+        return jwt_payload["jti"] in BLOCKLIST
+
+    @jwt.expired_token_loader
+    def expired_token_callback(jwt_header, jwt_payload):
+        return (
+            jsonify({"message": "The token has expired.", "error": "token_expired"}),
+            401,
+        )
+
+    @jwt.invalid_token_loader
+    def invalid_token_callback(error):
+        return (
+            jsonify(
+                {"message": "Signature verification failed.", "error": "invalid_token"}
+            ),
+            401,
+        )
+
+    @jwt.unauthorized_loader
+    def missing_token_callback(error):
+        return (
+            jsonify(
+                {
+                    "description": "Request does not contain an access token.",
+                    "error": "authorization_required",
+                }
+            ),
+            401,
+        )
+
+    @jwt.needs_fresh_token_loader
+    def token_not_fresh_callback(jwt_header, jwt_payload):
+        return (
+            jsonify(
+                {
+                    "description": "The token is not fresh.",
+                    "error": "fresh_token_required",
+                }
+            ),
+            401,
+        )
+
+    @jwt.revoked_token_loader
+    def revoked_token_callback(jwt_header, jwt_payload):
+        return (
+            jsonify(
+                {"description": "The token has been revoked.", "error": "token_revoked"}
+            ),
+            401,
+        )
+
+    @app.before_request
+    def create_tables():
+        db.create_all()
+
+    api.register_blueprint(ItemBlueprint)
+    api.register_blueprint(StoreBlueprint)
+    api.register_blueprint(TagBlueprint)
+    api.register_blueprint(UserBlueprint)
 
 
-if __name__ == '__main__':
-    app.run()
+    return app
