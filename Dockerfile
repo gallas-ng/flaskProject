@@ -26,3 +26,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade -r requirements.txt
 COPY . .
 CMD ["/bin/bash", "docker-entrypoint.sh"]
+
+# The following command will wire the app with redis task queue worker
+# run : docker run -w /app store-restapi sh -c "rq worker -u rediss://red-cto7513tq21c73c
+        #rvsng:anK4QqJLkTwdrKXpQcIerm1DM6LslVBn@oregon-redis.render.com:6379 emails"

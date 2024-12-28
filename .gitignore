@@ -1,4 +1,5 @@
-.env
+*.env
+local_db.env
 .venv
 .vscode
 __pycache__
