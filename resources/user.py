@@ -1,4 +1,5 @@
 import os
+import redis
 
 from sqlalchemy import or_
 from flask.views import MethodView
@@ -12,8 +13,10 @@ from flask_jwt_extended import (
     jwt_required,
 )
 from flask import current_app
+from rq import Queue
 from passlib.hash import pbkdf2_sha256
 from sqlalchemy.sql.functions import current_user
+from dotenv import load_dotenv
 
 from blocklist import BLOCKLIST
 from db import db
@@ -25,6 +28,11 @@ from tasks import send_user_registration_email
 
 
 blp = Blueprint("Users", "users", description="Operations on users")
+
+connection = redis.from_url(
+    os.getenv("REDIS_URL")
+)  # Get this from Render.com or run in Docker
+queue = Queue("emails", connection=connection)
 
 @blp.route("/register")
 class UserRegister(MethodView):
@@ -52,7 +60,7 @@ class UserRegister(MethodView):
         #     subject="Welcome",
         #     body= f"Hi {user.username}, you have successfully registered to our store API."
         # )
-        current_app.queue.enqueue(send_user_registration_email, user.username, user.email)
+        queue.enqueue(send_user_registration_email, user.email, user.username)
 
         return {"message": "User created successfully."}, 201
 

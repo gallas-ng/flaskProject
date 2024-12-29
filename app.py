@@ -1,5 +1,4 @@
 import os
-import redis
 import secrets
 
 from flask import Flask, jsonify
@@ -7,7 +6,6 @@ from flask_jwt_extended import JWTManager
 from flask_migrate import Migrate
 from flask_smorest import Api
 from dotenv import load_dotenv
-from rq import Queue
 
 from blocklist import BLOCKLIST
 from db import db
@@ -23,10 +21,6 @@ def create_app(db_url=None):
 
     load_dotenv()
 
-    conection = redis.from_url(
-        url= os.environ.get('REDIS_URL'),
-    )
-    app.queue = Queue("emails", connection=conection)
     app.config["PROPAGATE_EXCEPTIONS"] = True
     app.config["API_TITLE"] = "Stores Rest API"
     app.config["API_VERSION"] = "v1"
